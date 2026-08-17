@@ -30,7 +30,7 @@
 Puppet module to easily manage local users and their authorized keys.  It also manages local groups. It's an abstraction layer over the user and group resources to make it easier to add/remove users/groups across different systems using just hiera and calling this class.
 
 Features:
-  * maps keys into accounts according to the SSH key comment
+  * reads password hashes and SSH public keys from HashiCorp Vault
   * sets the password aging for non expiring accounts
   * generates a series of accounts (e.g. for testing purposes)
 
@@ -55,6 +55,8 @@ It is designed to be driven by hiera, not so much through code.
 
 ### Setup Requirements
   * The stdlib module
+  * The `sshkeys_core` module
+  * The `vault_msi` module, with its Puppet Server Vault agent and CLI configured
   * It does presume there is a basic system perl installed on systems being managed
 
 ### Beginning with local_users
@@ -64,20 +66,16 @@ Include the class in your code:
   class { 'local_users': }
 ```
 
-Create a list of SSH keys that will be referenced later (i.e. consumed) when setting up local users:
+Create the `puppet/local_users` KV secret in Vault. Password hashes are named
+`<username>_hash`. Each public key name starts with `<username>_pubkey`; this may
+be the complete name or be followed by any text. The complete Vault field name
+becomes the `ssh_authorized_key` resource title. Public-key values use the
+normal OpenSSH public-key format:
 
 ```
-local_users::add::keys:
-  - comment: 'jblogs@imac.local'
-    type: ssh-rsa 
-    key: 'AAAAB3NzaC1yc2EAAAABIwAAAQEArqFOapIoElAmJBlKq74MdlXQjPZ2xqOZ7xo2UZ4sRD4fRh+kgkfOP0+wius71pIJ2N2n7cgP1QWMP1i7xsvFJBnb+up9P0y93WTnf+wjKMNx3b9Xt43AffXAADegkWnaImIY+nVrqC1fOiq8xyDjT+kq5ItdE+QHaBNlsuP/FCSGQB8hhxOQyqwKsALdhedhZZ9MsCuVqf62Zti+V3CujyKwRuyeZa3f8zMLjjRFXXldxMVFMJv3/PbJNvMSGe38ikI6Dz/1ESJbNHJFcN+3sM6yzHWS1MROfW6jdxDEtvNgccirDDKUzmeA6wzGnHiDAqf/iJn/x4DUBdijROxE1Q=='
-  - comment: 'root@prd009'
-    type: ssh-rsa
-    key: 'AAAAB3NzaC1yc2EAAAAdaqabaaabaqcHyTOwUqmD5evjpDdqyOaR7DISjHa4hu5vwIjg1IecduOZ9Mx00St6emeGwIjMWIapLwaWmTds3DnrON+lFCmMXYPhgIZJpJ4JrxJevMNFXZObS+TdSRwsCo9nuehA9Y1+NPMEPFdtcwdBRSjxDwCbuHzgTYo+hS2Wzwz4B2KjGFvFKx6IlK9qKx7B31n5O4bJMSJLsw+BPe/4xqzDUHjBpcXPPOP+4TWZzhXqZCdXalQZkhxLEC4jHTVycPvpyd3fHr3LOGThpc2ldnh8JAJz71sA01AquErQXa1/pFRl6dGbCZLRuHU8flMj8dA4ZZWCU06cboAkCgxYifTwB8Dd'
-    options: 'from="10.X.X.X"'
-  - comment: 'bsmith@linux-9g92.site'
-    type: ssh-rsa
-    key: 'AAAAB3NzaC1yc2EAAAADAQABAAABAQDFcGZD9nyS34Q4olunx2UgN3XKmZqQT2CeKNiuA2/KJkscty9tWP4cG4syEGY21ws3YL11KLYlI1oH4r2qiBk/AdyKhqpo10sCdCuOVAA+kXK7UQGyAjjwlkCLMYkofjEc5iauz1E6d9UOyrtSMnWZ+B59tq5Kd5zPMXAG1MrzWRO4bB2LwT82HaxXKdoon3VCB7jnXKMYQkj1o890HFp/RA1r4B+EBMDf6Op6iSsQsZGG4607Qvhrf8mfeJbSJiK3FezbO7i2hbIyqfzTNaDgzAexJNpsO/67nlytLs9w2Sx7npdp8faMECPQU0DW31e2UckXgDN43edYpYlNNV/N'
+jblogs_hash: '$6$...'
+jblogs_pubkey: 'ssh-ed25519 AAAAC3... jblogs@workstation'
+jblogs_pubkeyjblogs-yubikey: 'ssh-rsa AAAAB3... jblogs@yubikey'
 ```
 
 Define any groups that will be required for the users.  Also delete some unnecessary groups or ignore some groups 
@@ -100,7 +98,8 @@ local_users::ignore::groups:
 
 ```
 
-Define some users, consuming both the SSH keys and groups previously specifed.  Also, delete some redundant users or ignore others 
+Define some users and their groups. Vault entries are associated automatically
+by username. Also, delete some redundant users or ignore others
 (i.e. don't remove them even if they are specified for removal in a more general scope, but they also don't need to 
 be fully defined through the 'add' data).
 
@@ -112,15 +111,11 @@ local_users::add::users:
     comment: Joe Blogs
     expiry: none
     groups: ['a','b','c']
-    auth_keys: 
-      - 'jblogs@imac.local'
   bsmith:
     uid: 1051
     comment: Bill Smith
     expiry: none
     mode: '0700'
-    auth_keys: 
-      - 'bsmith@linux-9g92.site'
   bsmith0:
     uid: 1052
     comment: Bill Smith 0
@@ -128,9 +123,6 @@ local_users::add::users:
     generate: 10
   root:
     expiry: none
-    auth_keys: 
-      - 'jblogs@imac.local'
-      - 'root@prd009'
 
 local_users::remove::users:
   - jsmith
@@ -156,14 +148,14 @@ at least) - e.g. `/root`, `/sbin`, etc. - which will corrupt your systems! (i.e.
 
 ### Adding SSH Keys
 
-Add an array of keys to hiera.  The comment field will be used to match against when being consumed by users.
+Add each key to the `puppet/local_users` Vault secret. The exact
+`<username>_pubkey` name and any name beginning with that prefix are accepted,
+so an optional suffix can distinguish multiple keys. The complete Vault field
+name is used as the `ssh_authorized_key` resource title. The value must contain
+an OpenSSH key type and base64 key; a trailing comment is optional.
 
 ```
-local_users::add::keys:
-  -
-    comment: 'jblogs@imac.local'
-    type: ssh-rsa 
-    key: 'AAAAB3NzaC1yc2EAAAABIwAAAQEArqFOapIoElAmJBlKq74MdlXQjPZ2xqOZ7xo2UZ4sRD4fRh+kgkfOP0+wius71pIJ2N2n7cgP1QWMP1i7xsvFJBnb+up9P0y93WTnf+wjKMNx3b9Xt43AffXAADegkWnaImIY+nVrqC1fOiq8xyDjT+kq5ItdE+QHaBNlsuP/FCSGQB8hhxOQyqwKsALdhedhZZ9MsCuVqf62Zti+V3CujyKwRuyeZa3f8zMLjjRFXXldxMVFMJv3/PbJNvMSGe38ikI6Dz/1ESJbNHJFcN+3sM6yzHWS1MROfW6jdxDEtvNgccirDDKUzmeA6wzGnHiDAqf/iJn/x4DUBdijROxE1Q=='
+jblogs_pubkey: 'ssh-ed25519 AAAAC3... jblogs@workstation'
 ```
 
 ### Adding Users
@@ -176,9 +168,11 @@ local_users::add::users:
     uid: 1000
     comment: Joe Blogs
     expiry: none
-    auth_keys: 
-      - 'jblogs@imac.local'
 ```
+
+If Vault contains `jblogs_hash`, that hash is assigned as the user's password.
+If it contains one or more entries beginning with `jblogs_pubkey`, all are
+installed in the user's `authorized_keys` file.
 
 ### Adding Groups
 
@@ -256,14 +250,8 @@ This concept can even be extended to create named sets that contain nested named
 
 ### Adding SSH Keys
 
-`local_users::add::keys`
-
-Requires an array of hashses.  
-
-Each hash must  have 3 fields:
- * `comment` - the name of the key, used to link entry to authorised_keys entries
- * `type` - the type of key, e.g. ssh-rsa 
- * `key` - the actual public key
+SSH keys are loaded from `puppet/local_users` using
+`vault_msi::kv_get('puppet/local_users')`. See [Adding SSH Keys](#adding-ssh-keys).
 
 ### Adding Users
 
@@ -272,11 +260,14 @@ Each hash must  have 3 fields:
 Requires a hash of user definition hashes.  
 
 Each user definition hash must have a comment field (except root), otherwise system defaults will prevail.  
-All Puppet user resource fields are supported, plus these additional ones:
-  * `auth_keys` - a list of keys that will be added to the authorized_keys file, these must be defined with `local_users::add::keys` 
+All Puppet user resource fields except `password` are supported, plus these additional ones:
   * `mode` - the mode of the home directory
   * `base_dir` - the directory where the user's home directory with be created within
   * `generate` - the number of similar users to create.  I.e. 10 wil create 10 users.  Each user will be numbered sequentially and if the UID is specified, it will also be incremented.
+
+The `password` and legacy `auth_keys` properties are ignored. Passwords and SSH
+keys are selected from Vault using each resulting username, including usernames
+created with `generate`.
 
 If the GID of the user does not correspond to an existing group, a new one will be created named after the user. 
 

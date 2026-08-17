@@ -174,8 +174,9 @@ class local_users::add (
       $merged_props3 = $merged_props2
     }
 
-    # Delete keys not understood by the user resource
-    $clean_props = delete( $merged_props3, ['auth_keys','mode','generate','base_dir'] )
+    # Delete module-only and legacy secret keys not understood by the user
+    # resource. Passwords and authorized keys now come from Vault.
+    $clean_props = delete( $merged_props3, ['auth_keys','password','mode','generate','base_dir'] )
 
     if $generate > 0 {
 
@@ -233,9 +234,13 @@ class local_users::add (
             $gecos = $props[comment]
           }
 
-          # If a password is being specified, make it the Sensitive data type to exclude from puppetdb reports
-          if 'password' in $clean_props {
-            $secure_override = {'password' => Sensitive($clean_props['password'])}
+          # Password hashes are stored in Vault as <username>_hash. Make the
+          # value Sensitive so it is redacted from Puppet reports.
+          $password_key = "${user}_hash"
+          if $password_key in $local_users::vault_secrets {
+            $secure_override = {
+              password => Sensitive(String($local_users::vault_secrets[$password_key])),
+            }
           } else {
             $secure_override = {}
           }
@@ -342,38 +347,27 @@ class local_users::add (
               require => User[$user],
             }
 
-            # Add the specified SSH keys to the account
-            $keys = $props[auth_keys]
-            if $keys =~ Array {
-              $keys.each | $key | {
-                #notify { "Checking authorized keys for $user: $key": }
-                $local_users::users_keys.each | $user_key | {
-                  $comment = $user_key[comment]
-                  #notify { "Checking authorized keys for $user: $key ($comment)": }
-                  if $comment == $key {
-                    #notify { "Found authorized keys for $user: $key": }
-                    $sak1 = {
-                      user    => $user,
-                      type    => $user_key['type'],
-                      key     => $user_key['key'],
-                      require => File["${user}home"],
-                    }
-                    if $user_key['target'] {
-                      $sak2 = merge( $sak1, { target =>  $user_key['target'] } )
-                    }
-                    else {
-                      $sak2 = $sak1
-                    }
-                    if $user_key['options'] {
-                      $sak3 = merge( $sak2, { options =>  $user_key['options'] } )
-                    }
-                    else {
-                      $sak3 = $sak2
-                    }
-                    create_resources( ssh_authorized_key, { "${comment} for ${user}" => $sak3 }, {} )
-                  }
-                }
+            # Every Vault entry whose name starts with <username>_pubkey is a
+            # complete OpenSSH public key (type, key, and optional comment).
+            # The suffix is optional and may contain any characters.
+            $public_key_prefix = "${user}_pubkey"
+            $public_keys = $local_users::vault_secrets.filter |$secret_name, $public_key| {
+              $secret_name[0, size($public_key_prefix)] == $public_key_prefix
+            }
+
+            $public_keys.each |$secret_name, $public_key| {
+              $public_key_parts = split(String($public_key), /\s+/)
+              if !$public_key_parts[1] {
+                fail("Vault secret puppet/local_users entry ${secret_name} is not a valid OpenSSH public key")
               }
+
+              $authorized_key = {
+                user    => $user,
+                type    => $public_key_parts[0],
+                key     => $public_key_parts[1],
+                require => File["${user}home"],
+              }
+              create_resources(ssh_authorized_key, { $secret_name => $authorized_key }, {})
             }
           }
         }

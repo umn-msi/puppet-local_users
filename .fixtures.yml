@@ -1,5 +1,8 @@
 fixtures:
   forge_modules:
+    sshkeys_core:
+      repo: "puppetlabs-sshkeys_core"
+      ref: "1.0.0"
     stdlib:
       repo: "puppetlabs-stdlib"
-      ref: "4.25.1"
+      ref: "9.4.1"
