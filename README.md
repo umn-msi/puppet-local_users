@@ -66,11 +66,12 @@ Include the class in your code:
   class { 'local_users': }
 ```
 
-Create the `puppet/local_users` KV secret in Vault. Password hashes are named
-`<username>_hash`. Each public key name starts with `<username>_pubkey`; this may
-be the complete name or be followed by any text. The complete Vault field name
-becomes the `ssh_authorized_key` resource title. Public-key values use the
-normal OpenSSH public-key format:
+Create the `puppet/local_users/hashes` and `puppet/local_users/pubkeys` KV
+secrets in the `secret-restricted` Vault mount. Password hashes in `hashes` are
+named `<username>_hash`. Each public key name in `pubkeys` starts with
+`<username>_pubkey`; this may be the complete name or be followed by any text.
+The complete Vault field name becomes the `ssh_authorized_key` resource title.
+Public-key values use the normal OpenSSH public-key format:
 
 ```
 jblogs_hash: '$6$...'
@@ -148,11 +149,12 @@ at least) - e.g. `/root`, `/sbin`, etc. - which will corrupt your systems! (i.e.
 
 ### Adding SSH Keys
 
-Add each key to the `puppet/local_users` Vault secret. The exact
-`<username>_pubkey` name and any name beginning with that prefix are accepted,
-so an optional suffix can distinguish multiple keys. The complete Vault field
-name is used as the `ssh_authorized_key` resource title. The value must contain
-an OpenSSH key type and base64 key; a trailing comment is optional.
+Add each key to the `puppet/local_users/pubkeys` secret in the
+`secret-restricted` Vault mount. The exact `<username>_pubkey` name and any
+name beginning with that prefix are accepted, so an optional suffix can
+distinguish multiple keys. The complete Vault field name is used as the
+`ssh_authorized_key` resource title. The value must contain an OpenSSH key type
+and base64 key; a trailing comment is optional.
 
 ```
 jblogs_pubkey: 'ssh-ed25519 AAAAC3... jblogs@workstation'

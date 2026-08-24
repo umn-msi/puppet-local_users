@@ -24,9 +24,10 @@ class local_users(
   }
 
   # Password hashes and SSH public keys are deliberately kept out of Hiera.
-  # Fetch the secret once and let local_users::add select the entries belonging
-  # to each account as it builds the catalog.
-  $vault_secrets = vault_msi::kv_get('puppet/local_users')
+  # Fetch each secret once and let local_users::add select entries for each
+  # account as it builds the catalog.
+  $vault_hashes = vault_msi::kv_get('puppet/local_users/hashes', 'secret-restricted')
+  $vault_pubkeys = vault_msi::kv_get('puppet/local_users/pubkeys', 'secret-restricted')
 
   class { 'local_users::remove': }
   -> class { 'local_users::add': }

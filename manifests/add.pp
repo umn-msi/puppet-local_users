@@ -237,9 +237,9 @@ class local_users::add (
           # Password hashes are stored in Vault as <username>_hash. Make the
           # value Sensitive so it is redacted from Puppet reports.
           $password_key = "${user}_hash"
-          if $password_key in $local_users::vault_secrets {
+          if $password_key in $local_users::vault_hashes {
             $secure_override = {
-              password => Sensitive(String($local_users::vault_secrets[$password_key])),
+              password => Sensitive(String($local_users::vault_hashes[$password_key])),
             }
           } else {
             $secure_override = {}
@@ -351,7 +351,7 @@ class local_users::add (
             # complete OpenSSH public key (type, key, and optional comment).
             # The suffix is optional and may contain any characters.
             $public_key_prefix = "${user}_pubkey"
-            $public_keys = $local_users::vault_secrets.filter |$secret_name, $public_key| {
+            $public_keys = $local_users::vault_pubkeys.filter |$secret_name, $public_key| {
               $secret_name[0, size($public_key_prefix)] == $public_key_prefix
             }
 

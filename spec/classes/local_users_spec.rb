@@ -3,13 +3,18 @@ require 'spec_helper'
 describe 'local_users' do
   let(:pre_condition) do
     <<~PUPPET
-      function vault_msi::kv_get(String $path) >> Hash {
-        assert_type(Enum['puppet/local_users'], $path)
-        $result = {
-          'root_hash' => '$6$/dBBM855e2zWLTa6$YiP9qjLYyDyMiBnDRg9Buxg4xKcmOFqCx6zYbd4HaJthZ92ybpUTIu8vcZw63wvngutvD7vHjuYldIa/ktAK6/',
-          'root_pubkey' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1rootConsoleKey root@console',
-          'root_pubkeyroot-recovery' => 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrootRecoveryKey root@recovery',
-          'another_pubkey.console' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtherUsersKey another@console',
+      function vault_msi::kv_get(String $path, String $mount) >> Hash {
+        assert_type(Enum['secret-restricted'], $mount)
+        $result = $path ? {
+          'puppet/local_users/hashes' => {
+            'root_hash' => '$6$/dBBM855e2zWLTa6$YiP9qjLYyDyMiBnDRg9Buxg4xKcmOFqCx6zYbd4HaJthZ92ybpUTIu8vcZw63wvngutvD7vHjuYldIa/ktAK6/',
+          },
+          'puppet/local_users/pubkeys' => {
+            'root_pubkey' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1rootConsoleKey root@console',
+            'root_pubkeyroot-recovery' => 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrootRecoveryKey root@recovery',
+            'another_pubkey.console' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtherUsersKey another@console',
+          },
+          default => fail("unexpected Vault path ${path}"),
         }
         $result
       }
