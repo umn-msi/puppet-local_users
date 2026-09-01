@@ -7,12 +7,12 @@ describe 'local_users' do
         assert_type(Enum['secret-restricted'], $mount)
         $result = $path ? {
           'puppet/local_users/hashes' => {
-            'root_hash' => '$6$/dBBM855e2zWLTa6$YiP9qjLYyDyMiBnDRg9Buxg4xKcmOFqCx6zYbd4HaJthZ92ybpUTIu8vcZw63wvngutvD7vHjuYldIa/ktAK6/',
+            'root' => '$6$/dBBM855e2zWLTa6$YiP9qjLYyDyMiBnDRg9Buxg4xKcmOFqCx6zYbd4HaJthZ92ybpUTIu8vcZw63wvngutvD7vHjuYldIa/ktAK6/',
           },
           'puppet/local_users/pubkeys' => {
-            'root_pubkey' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1rootConsoleKey root@console',
-            'root_pubkeyroot-recovery' => 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrootRecoveryKey root@recovery',
-            'another_pubkey.console' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtherUsersKey another@console',
+            'root' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1rootConsoleKey root@console',
+            'root-recovery' => 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrootRecoveryKey root@recovery',
+            'another.console' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtherUsersKey another@console',
           },
           default => fail("unexpected Vault path ${path}"),
         }
@@ -39,7 +39,7 @@ describe 'local_users' do
       it { is_expected.to have_ssh_authorized_key_resource_count(2) }
 
       it do
-        is_expected.to contain_ssh_authorized_key('root_pubkey').with(
+        is_expected.to contain_ssh_authorized_key('root').with(
           'user' => 'root',
           'type' => 'ssh-ed25519',
           'key'  => 'AAAAC3NzaC1lZDI1NTE5AAAAIK1rootConsoleKey',
@@ -47,7 +47,7 @@ describe 'local_users' do
       end
 
       it do
-        is_expected.to contain_ssh_authorized_key('root_pubkeyroot-recovery').with(
+        is_expected.to contain_ssh_authorized_key('root-recovery').with(
           'user' => 'root',
           'type' => 'ssh-rsa',
           'key'  => 'AAAAB3NzaC1yc2EAAAADAQABAAABAQCrootRecoveryKey',
