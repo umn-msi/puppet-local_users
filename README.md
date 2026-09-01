@@ -68,15 +68,21 @@ Include the class in your code:
 
 Create the `puppet/local_users/hashes` and `puppet/local_users/pubkeys` KV
 secrets in the `secret-restricted` Vault mount. Password hashes in `hashes` are
-named `<username>_hash`. Each public key name in `pubkeys` starts with
-`<username>_pubkey`; this may be the complete name or be followed by any text.
+named `<username>`. Each public key name in `pubkeys` starts with `<username>`;
+this may be the complete name or be followed by any text.
 The complete Vault field name becomes the `ssh_authorized_key` resource title.
-Public-key values use the normal OpenSSH public-key format:
+For example, the `hashes` secret could contain:
 
 ```
-jblogs_hash: '$6$...'
-jblogs_pubkey: 'ssh-ed25519 AAAAC3... jblogs@workstation'
-jblogs_pubkeyjblogs-yubikey: 'ssh-rsa AAAAB3... jblogs@yubikey'
+jblogs: '$6$...'
+```
+
+The `pubkeys` secret could contain the following. Public-key values use the
+normal OpenSSH public-key format:
+
+```
+jblogs: 'ssh-ed25519 AAAAC3... jblogs@workstation'
+jblogs-yubikey: 'ssh-rsa AAAAB3... jblogs@yubikey'
 ```
 
 Define any groups that will be required for the users.  Also delete some unnecessary groups or ignore some groups 
@@ -150,14 +156,14 @@ at least) - e.g. `/root`, `/sbin`, etc. - which will corrupt your systems! (i.e.
 ### Adding SSH Keys
 
 Add each key to the `puppet/local_users/pubkeys` secret in the
-`secret-restricted` Vault mount. The exact `<username>_pubkey` name and any
-name beginning with that prefix are accepted, so an optional suffix can
+`secret-restricted` Vault mount. The exact `<username>` name and any name
+beginning with that prefix are accepted, so an optional suffix can
 distinguish multiple keys. The complete Vault field name is used as the
 `ssh_authorized_key` resource title. The value must contain an OpenSSH key type
 and base64 key; a trailing comment is optional.
 
 ```
-jblogs_pubkey: 'ssh-ed25519 AAAAC3... jblogs@workstation'
+jblogs: 'ssh-ed25519 AAAAC3... jblogs@workstation'
 ```
 
 ### Adding Users
@@ -172,9 +178,9 @@ local_users::add::users:
     expiry: none
 ```
 
-If Vault contains `jblogs_hash`, that hash is assigned as the user's password.
-If it contains one or more entries beginning with `jblogs_pubkey`, all are
-installed in the user's `authorized_keys` file.
+If the hashes secret in Vault contains `jblogs`, that hash is assigned as the
+user's password. If the pubkeys secret contains one or more entries beginning
+with `jblogs`, all are installed in the user's `authorized_keys` file.
 
 ### Adding Groups
 
